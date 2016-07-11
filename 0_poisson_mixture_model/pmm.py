@@ -25,7 +25,7 @@ def m_step(data, k, w):
 
     return means, phis
 
-def pmm(data, k, max_iterations=3, threshold=1e-4, verbose=False):
+def pmm(data, k, max_iterations=20, threshold=1e-4, verbose=False):
     """
     Fits a poisson mixture model to the data with k latent classes.
 

@@ -87,13 +87,14 @@ def plot_1d_data_responsibilities(data, responsibilities, means):
     plt.scatter(means, np.zeros(len(means)), c='green', marker='*', s=400)
     plt.show()
 
-def plot_sweep(log_probs, bics):
+def plot_sweep(log_probs, bics, icls):
     """
     Plot model selection metrics resulting from a sweep.
     """
-    k_range = range(len(log_probs))
+    k_range = range(1, len(log_probs) + 1)
     plt.plot(k_range, log_probs, label='log prob', c='red')
     plt.plot(k_range, bics, label='bic', c='blue')
+    plt.plot(k_range, icls, label='icl', c='green')
     plt.legend()
     plt.show()
 
@@ -156,7 +157,10 @@ def bic(data, log_prob, num_params):
     """
     Bayesian information criterion.
     """
-    return -2 * log_prob + num_params * len(data)
+    return log_prob - .5 * num_params * len(data)
+
+def entropy(weights):
+    return -np.sum(np.log(weights) * weights)
 
 
 

@@ -19,17 +19,20 @@ def e_step(data, means, phis, density):
 
 def sweep(data, model, max_k=10, verbose=True):
 
-    log_probs, bics = [], []
+    log_probs, bics, icls = [], [], []
     best_responsibilities, best_means, best_phis, best_k = None, None, None, 0
-    best_bic = sys.maxint
+    best_bic = -sys.maxint
     for k in range(1, max_k + 1):
-        means, phis, log_prob, responsibilities = model(data, k, verbose=True)
-        bic = utils.bic(data, log_prob, num_params=2 * k)
+        means, phis, log_prob, responsibilities = model(data, k, verbose=False)
+        num_params = 2 * k
+        bic = utils.bic(data, log_prob, num_params)
+        icl = utils.entropy(responsibilities) + bic
 
         log_probs.append(log_prob)
         bics.append(bic)
+        icls.append(icl)
 
-        if bic < best_bic:
+        if bic > best_bic:
             best_k = k
             best_bic = bic
             best_responsibilities = responsibilities
@@ -40,7 +43,8 @@ def sweep(data, model, max_k=10, verbose=True):
             print '\nk: {}\tlog_prob: {:.5f}\tbic: {:.5f}'.format(k, log_prob, bic)
             print 'phis: {}'.format(phis)
             print 'means: {}'.format(means)
+            utils.plot_1d_data_responsibilities(data, responsibilities, means)
 
-    return best_k, log_probs, bics, best_responsibilities, best_means, best_phis
+    return best_k, log_probs, bics, icls, best_responsibilities, best_means, best_phis
 
     

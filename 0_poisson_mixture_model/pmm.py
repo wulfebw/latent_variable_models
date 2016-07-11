@@ -79,13 +79,17 @@ if __name__ == '__main__':
     data = utils.load_1d_data(filepath)
 
     # sweep over k values to find best model
-    best_k, log_probs, bics, best_responsibilities, best_means, best_phis = mm.sweep(data, pmm, max_k=5, verbose=True)
+    best_k, log_probs, bics, icls, best_responsibilities, best_means, best_phis = mm.sweep(data, pmm, max_k=8, verbose=True)
 
     best_log_prob = log_probs[best_k - 1]
     best_bic = bics[best_k - 1]
-    print '\nbest k: {}\tlog_prob: {:.5f}\tbic: {:.5f}'.format(best_k, best_log_prob, best_bic)
+    best_icl = icls[best_k - 1]
+    print '\nbest k: {}\tlog_prob: {:.5f}\tbic: {:.5f}\ticl: {:.5f}'.format(best_k, best_log_prob, best_bic, best_icl)
+    print 'log probs: {}'.format(log_probs)
+    print 'bics: {}'.format(bics)
     print 'phis: {}'.format(best_phis)
     print 'means: {}'.format(best_means)
+
     utils.plot_1d_data_responsibilities(data, best_responsibilities, best_means)
-    utils.plot_sweep(log_probs, bics)
+    utils.plot_sweep(log_probs, bics, icls)
 

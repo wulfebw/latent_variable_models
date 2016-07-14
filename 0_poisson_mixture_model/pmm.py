@@ -8,20 +8,28 @@ import mm
 import utils
 
 def m_step(data, k, w):
-    dim = data.shape[-1]
-
-    # compute phis
+    """
+    Args:
+        - data: samples as row, shape (num_samples, dim)
+        - k: number of clusters / classes
+        - w: responsibilities computed in e-step, shape (num_samples, K)
+    """
+    # phis
+    # for each phi, sum its responsibilities over the dataset 
+    # and divide by the number of samples total
+    # formally: $phi_{l} = 1/m * sum_{i} w_{l}^{i}$
     col_sum_w = np.sum(w, axis=0)
     phis = col_sum_w / len(data)
     
-    # compute means
-    means = np.zeros((k, dim))
+    # means
+    # for each class, compute a weighted sum of the samples 
+    # and normalize by the total weight for the class
+    # $mean_{l} = sum_{i} w_{l}^{i} * x^{i} / sum_{i} w_{l}^{i}$
+    means = np.zeros(k)
     for sidx, sample in enumerate(data):
         for midx in range(k):
             means[midx] += w[sidx, midx] * sample
-
-    for midx in range(k):
-        means[midx, :] /= col_sum_w[midx]
+    means /= col_sum_w
 
     return means, phis
 
@@ -41,12 +49,13 @@ def pmm(data, k, max_iterations=20, threshold=1e-4, verbose=False):
     """
     # initialize the mean parameters for each class
     means, assignments, _ = initialization.initialize(data, k, num_runs=15)
-    
+    phis = np.zeros(k)
+    for assignment in assignments:
+        phis[assignment] += 1
+    phis /= len(assignments)
+
     if verbose:
         utils.plot_1d_data_assigments(data, means, assignments)
-
-    # assume balanced dataset
-    phis = np.ones(k) / float(k)
 
     # repeatedly run e-step and m-step until convergence
     # initialize some values to reuse or return
@@ -54,7 +63,7 @@ def pmm(data, k, max_iterations=20, threshold=1e-4, verbose=False):
     for idx in range(max_iterations):
 
         # e-step
-        w, log_prob = mm.e_step(data, means, phis, density=utils.poisson)
+        w, log_prob = mm.e_step(data, means, phis, density=utils.log_poisson)
 
         # m-step
         means, phis = m_step(data, k, w)
@@ -76,10 +85,12 @@ def pmm(data, k, max_iterations=20, threshold=1e-4, verbose=False):
 if __name__ == '__main__':
     # load data
     filepath = 'data/poisson_mixture.csv'
-    data = utils.load_1d_data(filepath)
+    data = utils.load_1d_data(filepath, preprocess=False)
+
+    data = data[:50]
 
     # sweep over k values to find best model
-    best_k, log_probs, bics, icls, best_responsibilities, best_means, best_phis = mm.sweep(data, pmm, max_k=8, verbose=True)
+    best_k, log_probs, bics, icls, best_responsibilities, best_means, best_phis = mm.sweep(data, pmm, max_k=10, verbose=True)
 
     best_log_prob = log_probs[best_k - 1]
     best_bic = bics[best_k - 1]

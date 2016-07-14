@@ -75,17 +75,17 @@ def gmm(data, k, max_iterations=10, threshold=1e-5, verbose=False):
 
 if __name__ == '__main__':
     # generate data to model
-    k = 5
-    num_samples = 200
-    x_limits = [0,30]
-    y_limits = [0,30]
+    k = 3
+    num_samples = 1000
+    x_limits = [0,10]
+    y_limits = [0,10]
     data, means = utils.generate_data(k=k, num_samples=num_samples, x_limits=x_limits, y_limits=y_limits)
 
     # plot generated data
     utils.plot_data_k(data, k, means)
 
     # sweep over k values to find best model
-    best_k, log_probs, bics, icls, best_responsibilities, best_means, best_phis = mm.sweep(data, gmm)
+    best_k, log_probs, bics, icls, best_responsibilities, best_means, best_phis = mm.sweep(data, gmm, max_k=3)
 
     best_log_prob = log_probs[best_k - 1]
     best_bic = bics[best_k - 1]

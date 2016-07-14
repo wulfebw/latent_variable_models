@@ -52,14 +52,19 @@ def plot_data_responsibilities(data, responsibilities, means):
     Plt data colored based on class responsibilities.
     """
     k = np.shape(responsibilities)[-1]
-    if k not in [2, 3]:
-        msg = 'plot_data_responsibilities only works for 2 or 3 classes, got: {}'.format(k)
+    if k not in [1, 2, 3]:
+        msg = 'plot_data_responsibilities only works for 1, 2, or 3 classes, got: {}'.format(k)
         raise ValueError(msg)
 
     # add a dimension of zeros if k = 2
+    if k == 1:
+        zs = np.zeros((len(responsibilities),1))
+        responsibilities = np.hstack((responsibilities, zs, zs))
+
     if k == 2:
         zs = np.zeros((len(responsibilities),1))
         responsibilities = np.hstack((responsibilities, zs))
+
 
     plt.scatter(data[:,0], data[:,1], facecolors=responsibilities)
     plt.scatter(means[:,0], means[:,1], c='green', marker='*', s=400)
@@ -69,20 +74,13 @@ def plot_1d_data_responsibilities(data, responsibilities, means):
     """
     Plot original generated data, labeling using assignments.
     """
-    num_classes = len(means)
-    counter = collections.defaultdict(lambda: [0, np.zeros((num_classes))])
-    for sample, sample_responsibilities in zip(data, responsibilities):
-        k = sample[0]
-        for responsibility in sample_responsibilities:
-            counter[k][0] += 1
-            counter[k][1][int(responsibility) - 1] += 1
-
-    def get_color(weights):
-        return 'red'
-
-    for k, v in counter.iteritems():
-        c = get_color(v[1])
-        plt.bar(k, v[0], color=c, width=.5, alpha=.3)
+    bottoms = collections.defaultdict(int)
+    for sample, w in zip(data, responsibilities):
+        cidx = np.argmax(w)
+        c = COLORS[cidx]
+        bottom = bottoms[sample[0]]
+        bottoms[sample[0]] += 1
+        plt.bar(sample[0], 1, color=c, width=.5, alpha=.3, bottom=bottom)
     
     plt.scatter(means, np.zeros(len(means)), c='green', marker='*', s=400)
     plt.show()
@@ -92,20 +90,28 @@ def plot_sweep(log_probs, bics, icls):
     Plot model selection metrics resulting from a sweep.
     """
     k_range = range(1, len(log_probs) + 1)
-    plt.plot(k_range, log_probs, label='log prob', c='red')
-    plt.plot(k_range, bics, label='bic', c='blue')
-    plt.plot(k_range, icls, label='icl', c='green')
-    plt.legend()
-    plt.show()
+    plt.plot(k_range, log_probs, label='log prob', c='red', linestyle='-')
+    plt.plot(k_range, bics, label='bic', c='blue', linestyle='--')
+    plt.plot(k_range, icls, label='icl', c='green', linestyle='-.')
+    plt.legend(loc=0)
+    plt.xlabel('K')
+    plt.savefig('media/sweep.png')
 
-def load_1d_data(filepath):
+def load_1d_data(filepath, preprocess=False):
     data = []
     with open(filepath, 'rb') as infile:
         infile.readline()
         csv_reader = csv.reader(infile, delimiter=',')
         for row in csv_reader:
             data.append(int(row[-1]))
-    return np.asarray(data).reshape(-1,1)
+
+    data = np.asarray(data, dtype=np.float64).reshape(-1,1)
+
+    if preprocess:
+        for idx, sample in enumerate(data):
+            data[idx] = .5 * (np.sqrt(sample) + np.sqrt(sample + 1))
+
+    return data
 
 def generate_data(k, num_samples, x_limits, y_limits):
     """
@@ -153,11 +159,14 @@ def normal(point, mean):
 def poisson(point, mean):
     return mean ** point * np.exp(-mean) / np.math.factorial(point)
 
+def log_factorial(value):
+    return np.sum(np.log(v) for v in range(1, int(value) + 1, 1))
+
+def log_poisson(point, mean):
+    return point * np.log(mean) - mean - log_factorial(point)
+
 def bic(data, log_prob, num_params):
-    """
-    Bayesian information criterion.
-    """
-    return log_prob - .5 * num_params * len(data)
+    return log_prob - .5 * num_params * np.log(len(data))
 
 def entropy(weights):
     return -np.sum(np.log(weights) * weights)

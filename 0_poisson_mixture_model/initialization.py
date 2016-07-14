@@ -9,11 +9,19 @@ def k_means(data, k, max_iterations=100):
     """
     Runs k-means to get initial values
     """
+    if len(data) < k:
+        raise ValueError('must have more data points than centers, got: {}'.format(len(data)))
+
     dim = 1 if len(np.shape(data)) == 1 else np.shape(data)[-1]
     means = np.empty((k, dim))
 
+    # initialize means to random points in dataset
+    taken = set()
     for kidx in range(k):
-        rand_idx = np.random.randint(len(data) - 1)
+        rand_idx = np.random.randint(len(data))
+        while rand_idx in taken:
+            rand_idx = np.random.randint(len(data))
+        taken.add(rand_idx)
         means[kidx, :] = data[rand_idx, :]
 
     prev_assignments = []
@@ -102,10 +110,10 @@ def run_k_means_gmm():
 def run_k_means_poisson():
     # load data
     filepath = 'data/poisson_mixture.csv'
-    data = utils.load_1d_data(filepath)
-    
+    data = utils.load_1d_data(filepath, preprocess=True)
+
     # run k_means
-    k = 5
+    k = 3
     init_means, assignments, best_dist = initialize(data, k, num_runs=10)
     
     # plot results

@@ -9,7 +9,7 @@ class HMM(object):
     def __init__(self, data, k, max_iterations, threshold, verbose=True, seed=1):
         self.data = data
         self.k = k
-        self.m, self.T = data.shape
+        self.T = data.shape[0]
         self.max_iterations = max_iterations
         self.threshold = threshold
         self.verbose = verbose
@@ -17,7 +17,7 @@ class HMM(object):
 
     def initialize(self):
         # unpack dimensions
-        m, T, k = self.m, self.T, self.k
+        T, k = self.T, self.k
 
         # initialize model parameters
         unnormalized_pi = np.random.rand(k)
@@ -27,13 +27,12 @@ class HMM(object):
         self.B = np.random.randint(low=0, high=np.max(self.data), size=(k))
 
         # allocate responsibilities containers
-        self.alphas = np.empty((m, T + 1, k))
-        self.betas = np.empty((m, T + 1, k))
-        self.gammas = np.empty((m, T, k, k))
+        self.alphas = np.empty((T, k))
+        self.betas = np.empty((T, k))
 
-        # different try
-        self.gammas = np.empty((m, T, k))
-        self.etas = np.empty((m, T, k, k))
+        # wiki
+        self.gammas = np.empty((T, k))
+        self.etas = np.empty((T, k, k))
 
     def forward(self):
         """
@@ -53,56 +52,50 @@ class HMM(object):
         """
         # initialize first timestep value of alpha for each sample 
         # to the start probability of the corresponding latent class in A
-        self.alphas[:, 0, :] = self.pi
+        self.alphas[0, :] = self.pi
+        for i in range(self.k):
+            self.alphas[0, i] *= poisson_density(self.data[0], self.B[i])
 
-        # perform a forward pass for each sample
-        for sidx, sample in enumerate(self.data):
+        # tidx starts at 1 since zeroth timestep 
+        # of alphas has already been initialized
+        for tidx, value in enumerate(self.data[1:], 1):
 
-            # tidx starts at 1 since zeroth timestep 
-            # of alphas has already been initialized
-            for tidx, value in enumerate(sample, 1):
+            # iterate over k values to fill
+            for j in range(self.k):
 
-                # iterate over k values to fill
-                for j in range(self.k):
+                # iterate over previous k values
+                timestep_total = 0
+                for i in range(self.k):
+                    emission_prob = poisson_density(value, self.B[j])
+                    transition_prob = self.A[i, j]
+                    alpha_prob = self.alphas[tidx - 1, i]
+                    timestep_total += emission_prob * transition_prob * alpha_prob
 
-                    # iterate over previous k values
-                    timestep_total = 0
-                    for i in range(self.k):
-                        emission_prob = poisson_density(value, self.B[j])
-                        transition_prob = self.A[i, j]
-                        alpha_prob = self.alphas[sidx, tidx - 1, i]
-                        timestep_total += emission_prob * transition_prob * alpha_prob
-
-                    # set value for jth class at time t
-                    self.alphas[sidx, tidx, j] = timestep_total
+                # set value for jth class at time t
+                self.alphas[tidx, j] = timestep_total
 
     def backward(self):
         # initialize first timestep value of beta to one
         # and then iterate backward starting from the end
-        self.betas[:, -1, :] = 1
+        self.betas[-1, :] = 1
 
-        # perform a backward pass for each sample
-        for sidx, sample in enumerate(self.data):
+        # start from second to last
+        for tidx in range(self.T - 2, -1, -1):
 
-            # tidx starts at the last emission timestep (T - 1)
-            # since timestep T has been filled with ones
-            # and moves backward through time to timestep 0
-            for tidx in range(self.T - 1, -1, -1):
+            # iterate over k values to fill (timestep t)
+            # note that i and j are flipped from forward pass
+            for i in range(self.k):
 
-                # iterate over k values to fill (timestep t)
-                # note that i and j are flipped from forward pass
-                for i in range(self.k):
+                # iterate over next k values (timestep t + 1)
+                timestep_total = 0
+                for j in range(self.k):
+                    emission_prob = poisson_density(self.data[tidx + 1], self.B[j])
+                    transition_prob = self.A[i, j]
+                    beta_prob = self.betas[tidx + 1, j]
+                    timestep_total += emission_prob * transition_prob * beta_prob
 
-                    # iterate over next k values (timestep t + 1)
-                    timestep_total = 0
-                    for j in range(self.k):
-                        emission_prob = poisson_density(self.data[sidx, tidx], self.B[j])
-                        transition_prob = self.A[i, j]
-                        beta_prob = self.betas[sidx, tidx + 1, j]
-                        timestep_total += emission_prob * transition_prob * beta_prob
-
-                    # set value for jth class at time t
-                    self.betas[sidx, tidx, i] = timestep_total
+                # set value for jth class at time t
+                self.betas[tidx, i] = timestep_total
 
     def e_step(self):
         # compute alphas and betas
@@ -137,42 +130,45 @@ class HMM(object):
         # return log_prob
 
         # gammas
-        # self.gammas = self.alphas[:,1:,:] * self.betas[:,:-1,:] 
-        # self.gammas = np.mean(self.gammas, axis=0)
-        # self.gammas = self.gammas / np.sum(self.gammas, axis=(1))
+        self.gammas = self.alphas * self.betas
+        self.gammas = self.gammas / np.sum(self.gammas, axis=1, keepdims=True)
 
-        # # etas
-        # for sidx, sample in enumerate(self.data):
-        #     for tidx in range(self.T):
-        #         for i in range(self.k):
-        #             for j in range(self.k):
-        #                 a = self.alphas[sidx, tidx, i]
-        #                 b = self.betas[sidx, tidx + 1, j]
-        #                 transition_prob = self.A[i, j]
-        #                 emission_prob = poisson_density(self.data[sidx, tidx], self.B[j])
-        #                 self.etas[sidx, tidx, i, j] = a * transition_prob * emission_prob * b
+        # etas
+        for tidx in range(self.T - 1):
+            for i in range(self.k):
+                for j in range(self.k):
+                    a = self.alphas[tidx, i]
+                    b = self.betas[tidx + 1, j]
+                    transition_prob = self.A[i, j]
+                    emission_prob = poisson_density(self.data[tidx + 1], self.B[j])
+                    self.etas[tidx, i, j] = a * transition_prob * emission_prob * b
 
-        # self.etas = np.mean(self.etas, axis=0)
-        # self.eta /= np.sum(self.alphas[:, -1, :], axis=(-1))
-        # print
-        # raw_input()
+        self.etas /= np.sum(self.alphas[-1, :])
+
+        return np.sum(np.log(self.gammas))
 
     def m_step(self):
-        # average over samples
-        alphas = np.mean(self.alphas, axis=0)
-        betas = np.mean(self.betas, axis=0)
+        # pi
+        self.pi = self.gammas[0, :]
 
-        print alphas
-        print betas
-        raw_input()
-
-        # update A
+        # transition probabilities
         for i in range(self.k):
             for j in range(self.k):
-                for t in range(self.T):
-                    pass
+                numerator = 0
+                denom = 0
+                for tidx in range(self.T - 1):
+                    numerator += self.etas[tidx, i, j]
+                    denom += self.gammas[tidx, i]
+                self.A[i, j] = numerator / denom
 
-
+        # emission probabilities
+        for i in range(self.k):
+            total = 0
+            denom = 0
+            for tidx, value in enumerate(self.data):
+                total += value * self.gammas[tidx, i]
+                denom += self.gammas[tidx, i]
+            self.B[i] = total / denom
 
         # # update A
         # # sum over samples and timesteps

@@ -67,7 +67,7 @@ class TestHMM(unittest.TestCase):
         self.assertTrue(m.betas[0, 0] < m.betas[0, 1])
 
     def test_e_step(self):
-        data = np.array([1,2])
+        data = np.array([1,10,1,10,1,10])
         k = 2
         max_iterations = 10
         threshold = 1e-5
@@ -75,14 +75,15 @@ class TestHMM(unittest.TestCase):
         m.initialize()
         m.pi = np.array([.5,.5])
         m.A = np.array([[.5,.5],[.5,.5]])
-        m.B = np.array([1, 5])
+        m.B = np.array([1, 10])
         m.e_step()
         print m.gammas
+        print m.etas
         # what even is gamma?
 
     def test_m_step(self):
-        # data = np.array([[1,5], [5,1], [1,1], [5,5]])
-        data = np.array([1,10,1,10])
+        data = np.array([1,10,1,10,1,10,1,10])
+        # data = np.array([1, 1])
         k = 2
         max_iterations = 10
         threshold = 1e-5
@@ -100,10 +101,11 @@ class TestHMM(unittest.TestCase):
         # what even is gamma?
 
     def test_hmm_on_generated_data(self):
-        A = np.array([[.5,.5],[.5,.5]])
-        B = np.array([[1],[3]])
+        # k = 2 case
+        A = np.array([[0,1],[1,0]])
+        B = np.array([[1],[10]])
         pi = np.array([.5,.5])
-        T = 100
+        T = 20
         dist = np.random.poisson
         data = generate_data.generate_data(A, B, pi, T, dist)
         print data
@@ -117,6 +119,25 @@ class TestHMM(unittest.TestCase):
         print 'learned A: {}'.format(m.A)
         print 'actual B: {}'.format(B)
         print 'learned B: {}'.format(m.B)
+
+        # k = 3 case
+        # A = np.array([[.8,.1,.1],[.1,.8,.1],[.1,.8,.1]])
+        # B = np.array([[1],[10],[20]])
+        # pi = np.array([.5,.5,.5])
+        # T = 100
+        # dist = np.random.poisson
+        # data = generate_data.generate_data(A, B, pi, T, dist)
+        # print data
+
+        # k = 3
+        # max_iterations = 100
+        # threshold = 1e-5
+        # m = hmm.HMM(data, k, max_iterations, threshold)
+        # m.fit()
+        # print 'actual A: {}'.format(A)
+        # print 'learned A: {}'.format(m.A)
+        # print 'actual B: {}'.format(B)
+        # print 'learned B: {}'.format(m.B)
 
 
 

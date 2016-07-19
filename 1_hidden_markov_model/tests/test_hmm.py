@@ -101,11 +101,13 @@ class TestHMM(unittest.TestCase):
         # what even is gamma?
 
     def test_hmm_on_generated_data(self):
+        np.random.seed(2)
+
         # k = 2 case
         A = np.array([[0,1],[1,0]])
-        B = np.array([[1],[10]])
+        B = np.array([[2],[10]])
         pi = np.array([.5,.5])
-        T = 20
+        T = 100
         dist = np.random.poisson
         data = generate_data.generate_data(A, B, pi, T, dist)
         print data
@@ -120,9 +122,9 @@ class TestHMM(unittest.TestCase):
         print 'actual B: {}'.format(B)
         print 'learned B: {}'.format(m.B)
 
-        # k = 3 case
-        # A = np.array([[.8,.1,.1],[.1,.8,.1],[.1,.8,.1]])
-        # B = np.array([[1],[10],[20]])
+        # # k = 3 case
+        # A = np.array([[.33,.33,.33],[.33,.33,.33],[.33,.33,.33]])
+        # B = np.array([[2],[10],[20]])
         # pi = np.array([.5,.5,.5])
         # T = 100
         # dist = np.random.poisson
@@ -130,7 +132,7 @@ class TestHMM(unittest.TestCase):
         # print data
 
         # k = 3
-        # max_iterations = 100
+        # max_iterations = 50
         # threshold = 1e-5
         # m = hmm.HMM(data, k, max_iterations, threshold)
         # m.fit()
@@ -139,6 +141,24 @@ class TestHMM(unittest.TestCase):
         # print 'actual B: {}'.format(B)
         # print 'learned B: {}'.format(m.B)
 
+        # # k = 4 case
+        # A = np.array([[0,1,0,0],[0,0,1,0],[0,0,0,1],[1,0,0,0]])
+        # B = np.array([[2],[10],[20],[30]])
+        # pi = np.array([.25,.25,.25,.25])
+        # T = 100
+        # dist = np.random.poisson
+        # data = generate_data.generate_data(A, B, pi, T, dist)
+        # print data
+
+        # k = 4
+        # max_iterations = 50
+        # threshold = 1e-5
+        # m = hmm.HMM(data, k, max_iterations, threshold)
+        # m.fit()
+        # print 'actual A: {}'.format(A)
+        # print 'learned A: {}'.format(m.A)
+        # print 'actual B: {}'.format(B)
+        # print 'learned B: {}'.format(m.B)
 
 
 

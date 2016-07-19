@@ -4,6 +4,12 @@ import numpy as np
 def poisson_density(point, mean):
     return mean ** point * np.exp(-mean) / np.math.factorial(point)
 
+def log_factorial(value):
+    return np.sum(np.log(v) for v in range(1, int(value) + 1, 1))
+
+def log_poisson_density(point, mean):
+    return point * np.log(mean) - mean - log_factorial(point)
+
 class HMM(object):
 
     def __init__(self, data, k, max_iterations, threshold, verbose=True, seed=1):
@@ -52,9 +58,9 @@ class HMM(object):
         """
         # initialize first timestep value of alpha for each sample 
         # to the start probability of the corresponding latent class in A
-        self.alphas[0, :] = self.pi
+        self.alphas[0, :] = np.log(self.pi)
         for i in range(self.k):
-            self.alphas[0, i] *= poisson_density(self.data[0], self.B[i])
+            self.alphas[0, i] += log_poisson_density(self.data[0], self.B[i])
 
         # tidx starts at 1 since zeroth timestep 
         # of alphas has already been initialized
@@ -66,13 +72,18 @@ class HMM(object):
                 # iterate over previous k values
                 timestep_total = 0
                 for i in range(self.k):
-                    emission_prob = poisson_density(value, self.B[j])
+                    
                     transition_prob = self.A[i, j]
-                    alpha_prob = self.alphas[tidx - 1, i]
-                    timestep_total += emission_prob * transition_prob * alpha_prob
+                    alpha_prob = np.exp(self.alphas[tidx - 1, i])
+                    timestep_total += transition_prob * alpha_prob
+
+                emission_prob = log_poisson_density(value, self.B[j])
 
                 # set value for jth class at time t
-                self.alphas[tidx, j] = timestep_total
+                self.alphas[tidx, j] = np.log(timestep_total) + emission_prob
+
+        # convert to normal from log form
+        self.alphas = np.exp(self.alphas)
 
     def backward(self):
         # initialize first timestep value of beta to one
@@ -102,33 +113,6 @@ class HMM(object):
         self.forward()
         self.backward()
 
-        # print self.A
-        # print self.B
-        # self.alphas = np.array([[[.5,.5],[.1,.2]]])
-        # self.betas = np.array([[[.2,.1],[.3,.1]]])
-        # raw_input()
-
-        # # compute gammas
-        # for sidx, sample in enumerate(self.data):
-        #     for tidx in range(self.T):
-        #         for i in range(self.k):
-        #             for j in range(self.k):
-        #                 a = self.alphas[sidx, tidx, i]
-        #                 b = self.betas[sidx, tidx + 1, j]
-        #                 transition_prob = self.A[i, j]
-        #                 emission_prob = poisson_density(self.data[sidx, tidx], self.B[j])
-        #                 self.gammas[sidx, tidx, i, j] = a * transition_prob * emission_prob * b
-        #                 print a
-        #                 print b
-        #                 print transition_prob
-        #                 print emission_prob
-        #                 print self.gammas
-        #                 raw_input()
-
-        # # compute log probability of data
-        # log_prob = np.sum(np.log(self.gammas + 1e-8))
-        # return log_prob
-
         # gammas
         self.gammas = self.alphas * self.betas
         self.gammas = self.gammas / np.sum(self.gammas, axis=1, keepdims=True)
@@ -145,7 +129,7 @@ class HMM(object):
 
         self.etas /= np.sum(self.alphas[-1, :])
 
-        return np.sum(np.log(self.gammas))
+        return np.sum(np.log(self.alphas[-1]))
 
     def m_step(self):
         # pi
@@ -168,28 +152,8 @@ class HMM(object):
             for tidx, value in enumerate(self.data):
                 total += value * self.gammas[tidx, i]
                 denom += self.gammas[tidx, i]
+
             self.B[i] = total / denom
-
-        # # update A
-        # # sum over samples and timesteps
-        # new_A = np.sum(self.gammas, axis=(0,1))
-        # # normalize across classes by dividing each column by its sum
-        # self.A = new_A / (np.sum(new_A, axis=0, keepdims=True) + 1e-8)
-
-        # # update pi
-        # # ???
-
-        # # update B
-        # # recompute mean value
-        # self.B = np.zeros(self.k)
-        # for i in range(self.k):
-        #     for j in range(self.k):
-        #         for sidx, sample in enumerate(self.data):
-        #             for tidx, value in enumerate(sample):
-        #                 self.B[i] += self.gammas[sidx, tidx, i, j] * value
-
-        # # normalize
-        # self.B /= np.sum(self.gammas, axis=(0,1,3))
 
     def fit(self):
         

@@ -8,6 +8,8 @@ def log_factorial(value):
     return np.sum(np.log(v) for v in range(1, int(value) + 1, 1))
 
 def log_poisson_density(point, mean):
+    if mean <= 0:
+        raise ValueError('mean value must be > 0, got : {}'.format(mean))
     return point * np.log(mean) - mean - log_factorial(point)
 
 class HMM(object):
@@ -109,6 +111,7 @@ class HMM(object):
                 self.betas[tidx, i] = timestep_total
 
     def e_step(self):
+
         # compute alphas and betas
         self.forward()
         self.backward()
@@ -129,7 +132,9 @@ class HMM(object):
 
         self.etas /= np.sum(self.alphas[-1, :])
 
-        return np.sum(np.log(self.alphas[-1]))
+        # what is the actual log prob?
+        return np.random.randint(10000)
+        # return np.sum(np.log(self.alphas[-1]))
 
     def m_step(self):
         # pi

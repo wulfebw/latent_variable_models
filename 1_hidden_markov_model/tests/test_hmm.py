@@ -208,8 +208,10 @@ class TestHMMRealData(unittest.TestCase):
         print m.alphas
 
     def test_hmm_on_real_data(self):
+        np.random.seed(42)
+
         data = self.get_data()
-        k = 10
+        k = 4
         max_iterations = 50
         threshold = 1e-10
         m = hmm.HMM(data, k, max_iterations, threshold, verbose=True, seed=np.random.randint(100))

@@ -62,15 +62,10 @@ class HMM(object):
         """
         # initialize first timestep value of alpha for each sample 
         # to the start probability of the corresponding latent class in A
-        self.alphas[0, :] = np.log(self.pi)
-        for i in range(self.k):
-            self.alphas[0, i] += log_poisson_density(self.data[0], self.B[i])
+        self.alphas[0, :] = np.log(self.pi) + self.log_densities[0, :]
 
         # allocate a buffer to reuse in inner loop
         timestep_values = np.empty(self.k)
-
-        # compute log transitions once here
-        log_A = np.log(self.A)
 
         # tidx starts at 1 since zeroth timestep 
         # of alphas has already been initialized
@@ -81,16 +76,10 @@ class HMM(object):
 
                 # iterate over previous k values
                 for i in range(self.k):
-                    timestep_values[i] = log_A[i, j] + self.alphas[tidx - 1, i]
-
-                # numerically stable sum over timestep_values
-                timestep_total = utils.log_sum_exp(timestep_values)
-
-                # probability of emitting value
-                emission_prob = log_poisson_density(value, self.B[j])
+                    timestep_values[i] = self.log_A[i, j] + self.alphas[tidx - 1, i]
 
                 # set value for jth class at time t
-                self.alphas[tidx, j] = timestep_total + emission_prob
+                self.alphas[tidx, j] = utils.log_sum_exp(timestep_values) + self.log_densities[tidx, j]
 
     def backward(self):
         # initialize first timestep value of beta to zero
@@ -101,9 +90,6 @@ class HMM(object):
         # allocate a buffer to reuse in inner loop
         timestep_values = np.empty(self.k)
 
-        # compute log transitions once here
-        log_A = np.log(self.A)
-
         # start from second to last
         for tidx in range(self.T - 2, -1, -1):
 
@@ -113,21 +99,20 @@ class HMM(object):
 
                 # iterate over next k values (timestep t + 1)
                 for j in range(self.k):
-                    emission_prob = log_poisson_density(self.data[tidx + 1], self.B[j])
-                    transition_prob = log_A[i, j]
-                    beta_prob = self.betas[tidx + 1, j]
-                    timestep_values[j] = emission_prob + transition_prob + beta_prob
-
-                # numerically stable sum 
-                timestep_total = utils.log_sum_exp(timestep_values)
+                    timestep_values[j] = self.log_densities[tidx + 1, j] + \
+                                         self.log_A[i, j] + \
+                                         self.betas[tidx + 1, j]
 
                 # set value for jth class at time t
-                self.betas[tidx, i] = timestep_total
+                self.betas[tidx, i] = utils.log_sum_exp(timestep_values)
 
     def e_step(self):
-        # # precompute information used in both forward and backward steps
-        # self.log_A = np.log(self.A)
-        # self.log_poisson_densities = 
+        # precompute information
+        self.log_A = np.log(self.A)
+        self.log_densities = np.empty((self.T, self.k))
+        for tidx in range(self.T):
+            for i in range(self.k):
+                self.log_densities[tidx, i] = log_poisson_density(self.data[tidx], self.B[i])
 
         # compute alphas and betas
         self.forward()
@@ -138,24 +123,24 @@ class HMM(object):
         # normalize
         for tidx in range(self.T):
             self.gammas[tidx, :] -= utils.log_sum_exp(self.gammas[tidx, :])
-        # go from log to normal space
+        # convert from log to normal space
         self.gammas = np.exp(self.gammas)
 
         # etas: probability of being in state i and j at times t and t+1
         for tidx in range(self.T - 1):
             for i in range(self.k):
                 for j in range(self.k):
-                    a = self.alphas[tidx, i]
-                    b = self.betas[tidx + 1, j]
-                    transition_prob = np.log(self.A[i, j])
-                    emission_prob = log_poisson_density(self.data[tidx + 1], self.B[j])
-                    self.etas[tidx, i, j] = a + transition_prob + emission_prob + b
+                    self.etas[tidx, i, j] = self.alphas[tidx, i] + \
+                                            self.log_A[i, j] + \
+                                            self.log_densities[tidx + 1, j] + \
+                                            self.betas[tidx + 1, j]
         # normalize
         self.etas -= utils.log_sum_exp(self.alphas[-1, :])
-        # go from log to normal space
+        # convert from log to normal space
         self.etas = np.exp(self.etas)
 
-        return np.random.rand() * 1000
+        # the log sum exp of the last alphas gives the log prob of the full sequence
+        return utils.log_sum_exp(self.alphas[-1, :])
 
     def m_step(self):
         # pi
@@ -164,25 +149,14 @@ class HMM(object):
         # transition probabilities
         for i in range(self.k):
             for j in range(self.k):
-                numerator = 0
-                denom = 0
-                for tidx in range(self.T - 1):
-                    numerator += self.etas[tidx, i, j]
-                    denom += self.gammas[tidx, i]
-                self.A[i, j] = numerator / denom
+                self.A[i, j] = np.sum(self.etas[:-1, i, j]) / np.sum(self.gammas[:-1, i])
 
         # emission probabilities
-        for i in range(self.k):
-            total = 0
-            denom = 0
-            for tidx, value in enumerate(self.data):
-                total += value * self.gammas[tidx, i]
-                denom += self.gammas[tidx, i]
-
-            self.B[i] = total / denom
+        self.B = np.sum(self.data[:, np.newaxis] * self.gammas, axis=0) 
+        self.B /= np.sum(self.gammas, axis=0)
 
     def fit(self):
-        
+
         # initialize parameter estimates
         self.initialize()
 
@@ -193,17 +167,15 @@ class HMM(object):
             # e-step
             log_prob = self.e_step()
 
-            # check for convergence
-            diff = abs(log_prob - prev_log_prob)
-            if diff < self.threshold:
-                break
-            else:
-                prev_log_prob = log_prob
-                if self.verbose:
-                    print 'iter: {}\tlog_prob: {:.4f}\tdiff: {:.4f}'.format(idx, log_prob, diff)
-
             # m-step
             self.m_step()
+
+            # check for convergence
+            if abs(log_prob - prev_log_prob) < self.threshold: 
+                break
+            prev_log_prob = log_prob
+            if self.verbose: 
+                print 'iter: {}\tlog_prob: {:.4f}'.format(idx, log_prob)
 
         # return the log probability of the fit
         return log_prob

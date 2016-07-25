@@ -77,10 +77,39 @@ class TestHMM(unittest.TestCase):
         m.pi = np.array([.5,.5])
         m.A = np.array([[.5,.5],[.5,.5]])
         m.B = np.array([1, 10])
-        m.e_step()
+        m._e_step()
         print m.gammas
         print m.etas
         # what even is gamma?
+
+    def test_e_step_comparison(self):
+        data = np.array([1,10,1,10,1,10])
+        k = 2
+        max_iterations = 10
+        threshold = 1e-5
+
+        np.random.seed(2)
+        m = hmm.HMM(data, k, max_iterations, threshold)
+        m.initialize()
+        m.pi = np.array([.5,.5])
+        m.A = np.array([[.5,.5],[.5,.5]])
+        m.B = np.array([1, 10])
+        m.e_step()
+        g1 = m.gammas
+        e1 = m.etas
+
+        np.random.seed(2)
+        m = hmm.HMM(data, k, max_iterations, threshold)
+        m.initialize()
+        m.pi = np.array([.5,.5])
+        m.A = np.array([[.5,.5],[.5,.5]])
+        m.B = np.array([1, 10])
+        m._e_step()
+        g2 = m.gammas
+        e2 = m.etas
+
+        print g1 - g2
+        print e1 - e2
 
     def test_m_step(self):
         data = np.array([1,10,1,10,1,10,1,10])
@@ -102,7 +131,7 @@ class TestHMM(unittest.TestCase):
         # what even is gamma?
 
     def test_hmm_on_generated_data(self):
-        # np.random.seed(2)
+        np.random.seed(2)
 
         # k = 2 case
         A = np.array([[0,1],[1,0]])
@@ -175,7 +204,7 @@ class TestHMMRealData(unittest.TestCase):
         threshold = 1e-5
         m = hmm.HMM(data, k, max_iterations, threshold)
         m.initialize()
-        m.forward()
+        m._forward()
         print m.alphas
 
     def test_hmm_on_real_data(self):

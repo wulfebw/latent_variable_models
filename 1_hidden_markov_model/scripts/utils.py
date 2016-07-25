@@ -14,6 +14,17 @@ def load_data(input_filepath):
     data = np.asarray(data, dtype=np.int64)
     return data
 
+def log_sum_exp(values):
+    max_value = max(values)
+    if np.isinf(max_value):
+        return -np.inf
+
+    total = 0
+    for v in values:
+        total += np.exp(v - max_value)
+
+    return np.log(total) + max_value
+
 if __name__ == '__main__':
     input_filepath = '../data/old_faithful.csv'
     data = load_data(input_filepath)

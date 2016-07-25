@@ -209,7 +209,7 @@ class TestHMMRealData(unittest.TestCase):
 
     def test_hmm_on_real_data(self):
         data = self.get_data()
-        k = 2
+        k = 10
         max_iterations = 50
         threshold = 1e-10
         m = hmm.HMM(data, k, max_iterations, threshold, verbose=True, seed=np.random.randint(100))

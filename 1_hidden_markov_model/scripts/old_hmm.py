@@ -66,11 +66,50 @@ class HMM(object):
         for i in range(self.k):
             self.alphas[0, i] += log_poisson_density(self.data[0], self.B[i])
 
+        # tidx starts at 1 since zeroth timestep 
+        # of alphas has already been initialized
+        for tidx, value in enumerate(self.data[1:], 1):
+
+            # iterate over k values to fill
+            for j in range(self.k):
+
+                # iterate over previous k values
+                timestep_total = 0
+                for i in range(self.k):
+                    timestep_total += self.A[i, j] * np.exp(self.alphas[tidx - 1, i])
+
+                emission_prob = log_poisson_density(value, self.B[j])
+
+                # set value for jth class at time t
+                self.alphas[tidx, j] = np.log(timestep_total) + emission_prob
+
+        # convert to normal from log form
+        self.alphas = np.exp(self.alphas)
+
+    def _forward(self):
+        """
+        The forward pass computes for each sample, for each timestep, 
+        and for each latent class, the probability that the latent state
+        was the latent class, and stores these values in self.alphas.
+        
+        This is accomplished using a dynamic programming approach that takes
+        advantage of the assumption that the future depends only upon the previous 
+        timestep. Specifically, it iterates through each sequence keeping track
+        of the probability of each class up until that timestep. Then, to compute
+        the probability of each time step at t + 1, it sums over a set of 
+        probabilities where each is the probability of transitioning from a 
+        previous class times the probability of the current class given the 
+        observation times the probability of the previous class. This sum gives
+        the total probability of being in a certain class at timestep t + 1.
+        """
+        # initialize first timestep value of alpha for each sample 
+        # to the start probability of the corresponding latent class in A
+        self.alphas[0, :] = np.log(self.pi)
+        for i in range(self.k):
+            self.alphas[0, i] += log_poisson_density(self.data[0], self.B[i])
+
         # allocate a buffer to reuse in inner loop
         timestep_values = np.empty(self.k)
-
-        # compute log transitions once here
-        log_A = np.log(self.A)
 
         # tidx starts at 1 since zeroth timestep 
         # of alphas has already been initialized
@@ -81,7 +120,7 @@ class HMM(object):
 
                 # iterate over previous k values
                 for i in range(self.k):
-                    timestep_values[i] = log_A[i, j] + self.alphas[tidx - 1, i]
+                    timestep_values[i] = np.log(self.A[i, j]) + self.alphas[tidx - 1, i]
 
                 # numerically stable sum over timestep_values
                 timestep_total = utils.log_sum_exp(timestep_values)
@@ -93,6 +132,29 @@ class HMM(object):
                 self.alphas[tidx, j] = timestep_total + emission_prob
 
     def backward(self):
+        # initialize first timestep value of beta to one
+        # and then iterate backward starting from the end
+        self.betas[-1, :] = 1
+
+        # start from second to last
+        for tidx in range(self.T - 2, -1, -1):
+
+            # iterate over k values to fill (timestep t)
+            # note that i and j are flipped from forward pass
+            for i in range(self.k):
+
+                # iterate over next k values (timestep t + 1)
+                timestep_total = 0
+                for j in range(self.k):
+                    emission_prob = poisson_density(self.data[tidx + 1], self.B[j])
+                    transition_prob = self.A[i, j]
+                    beta_prob = self.betas[tidx + 1, j]
+                    timestep_total += emission_prob * transition_prob * beta_prob
+
+                # set value for jth class at time t
+                self.betas[tidx, i] = timestep_total
+
+    def _backward(self):
         # initialize first timestep value of beta to zero
         # and then iterate backward starting from the end
         # zero because operating in log space
@@ -100,9 +162,6 @@ class HMM(object):
 
         # allocate a buffer to reuse in inner loop
         timestep_values = np.empty(self.k)
-
-        # compute log transitions once here
-        log_A = np.log(self.A)
 
         # start from second to last
         for tidx in range(self.T - 2, -1, -1):
@@ -114,7 +173,7 @@ class HMM(object):
                 # iterate over next k values (timestep t + 1)
                 for j in range(self.k):
                     emission_prob = log_poisson_density(self.data[tidx + 1], self.B[j])
-                    transition_prob = log_A[i, j]
+                    transition_prob = np.log(self.A[i, j])
                     beta_prob = self.betas[tidx + 1, j]
                     timestep_values[j] = emission_prob + transition_prob + beta_prob
 
@@ -125,23 +184,45 @@ class HMM(object):
                 self.betas[tidx, i] = timestep_total
 
     def e_step(self):
-        # # precompute information used in both forward and backward steps
-        # self.log_A = np.log(self.A)
-        # self.log_poisson_densities = 
 
         # compute alphas and betas
         self.forward()
         self.backward()
 
-        # gammas: probability of being in state i at time t
+        # gammas
+        self.gammas = self.alphas * self.betas
+        self.gammas = self.gammas / np.sum(self.gammas, axis=1, keepdims=True)
+
+        # etas
+        for tidx in range(self.T - 1):
+            for i in range(self.k):
+                for j in range(self.k):
+                    a = self.alphas[tidx, i]
+                    b = self.betas[tidx + 1, j]
+                    transition_prob = self.A[i, j]
+                    emission_prob = poisson_density(self.data[tidx + 1], self.B[j])
+                    self.etas[tidx, i, j] = a * transition_prob * emission_prob * b
+
+        self.etas /= np.sum(self.alphas[-1, :])
+
+        return np.random.rand() * 1000
+
+    def _e_step(self):
+
+        # compute alphas and betas
+        self._forward()
+        # print 'alphas: {}'.format(self.alphas)
+        self._backward()
+        # print 'betas: {}'.format(self.betas)
+
+        # gammas
         self.gammas = self.alphas + self.betas
-        # normalize
         for tidx in range(self.T):
             self.gammas[tidx, :] -= utils.log_sum_exp(self.gammas[tidx, :])
-        # go from log to normal space
         self.gammas = np.exp(self.gammas)
+        # print 'gammas: {}'.format(self.gammas)
 
-        # etas: probability of being in state i and j at times t and t+1
+        # etas
         for tidx in range(self.T - 1):
             for i in range(self.k):
                 for j in range(self.k):
@@ -150,10 +231,11 @@ class HMM(object):
                     transition_prob = np.log(self.A[i, j])
                     emission_prob = log_poisson_density(self.data[tidx + 1], self.B[j])
                     self.etas[tidx, i, j] = a + transition_prob + emission_prob + b
-        # normalize
+
         self.etas -= utils.log_sum_exp(self.alphas[-1, :])
-        # go from log to normal space
         self.etas = np.exp(self.etas)
+        # print 'etas: {}'.format(self.etas)
+        # raw_input()
 
         return np.random.rand() * 1000
 
@@ -191,7 +273,7 @@ class HMM(object):
         for idx in range(self.max_iterations):
 
             # e-step
-            log_prob = self.e_step()
+            log_prob = self._e_step()
 
             # check for convergence
             diff = abs(log_prob - prev_log_prob)

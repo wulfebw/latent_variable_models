@@ -10,6 +10,7 @@ sys.path.append(os.path.abspath(path))
 
 import generate_data
 import hmm
+import utils
 
 class TestHMM(unittest.TestCase):
 
@@ -160,7 +161,32 @@ class TestHMM(unittest.TestCase):
         print 'actual B: {}'.format(B)
         print 'learned B: {}'.format(m.B)
 
+class TestHMMRealData(unittest.TestCase):
 
+    def get_data(self):
+        input_filepath = '../data/old_faithful.csv'
+        data = utils.load_data(input_filepath)
+        return data
+
+    def test_forward(self):
+        data = self.get_data()
+        k = 2
+        max_iterations = 10
+        threshold = 1e-5
+        m = hmm.HMM(data, k, max_iterations, threshold)
+        m.initialize()
+        m.forward()
+        print m.alphas
+
+    def test_hmm_on_real_data(self):
+        data = self.get_data()
+        k = 2
+        max_iterations = 50
+        threshold = 1e-10
+        m = hmm.HMM(data, k, max_iterations, threshold, verbose=True, seed=np.random.randint(100))
+        m.fit()
+        print 'learned A: {}'.format(m.A)
+        print 'learned B: {}'.format(m.B)
 
 if __name__ == '__main__':
     unittest.main()

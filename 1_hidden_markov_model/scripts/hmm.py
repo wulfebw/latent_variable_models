@@ -32,7 +32,7 @@ class HMM(object):
         self.pi = unnormalized_pi / np.sum(unnormalized_pi)
         unnormalized_A = np.random.rand(k, k) 
         self.A = unnormalized_A / np.sum(unnormalized_A, axis=1, keepdims=True)
-        self.B = np.random.randint(low=0, high=np.max(self.data), size=(k))
+        self.B = np.float64(np.random.randint(low=0, high=np.max(self.data), size=(k)))
 
         # allocate responsibilities containers
         self.alphas = np.empty((T, k))

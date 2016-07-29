@@ -1,7 +1,11 @@
 
+import copy
+import math
 import numpy as np
 
 import utils
+
+def bic(log_prob, )
 
 def log_factorial(value):
     return np.sum(np.log(v) for v in range(1, int(value) + 1, 1))
@@ -35,11 +39,12 @@ class SBM(object):
         self.pis = np.ones(self.k) / self.k
         # gamma is the mean of the poisson associated with edges 
         # between class i and class j
-        self.gammas = np.abs(np.random.randn(self.k * self.k).reshape(self.k, self.k)) + np.mean(self.data)
+        self.gammas = np.abs(np.random.randn(self.k * self.k).reshape(self.k, self.k)) + np.max(self.data)
 
     def m_step(self):
-        if len(self.gammas[self.gammas < 0]) >  0:
-            print self.gammas
+        # assert valid tau
+        assert np.all([abs(v - 1) < 1e-5 for v in np.sum(self.taus, axis=1)])
+        assert not np.any([v < 0 for v in self.taus.flatten()])
 
         # update latent class probabilities
         self.pis = np.sum(self.taus, axis=0) / self.N
@@ -53,24 +58,80 @@ class SBM(object):
                     for j in range(self.N):
                         total += self.taus[i,k] * self.taus[j,l] * self.data[i,j]
                         normalizer += self.taus[i,k] * self.taus[j,l]
-
                 self.gammas[k,l] = total / normalizer
 
+    # def _e_step(self):
+    #     for idx in range(self.e_iterations):
+    #         tau_copy = copy.deepcopy(self.taus)
+    #         for i in range(self.N):
+    #             for k in range(self.k):
+    #                 total = np.log(self.pis[k])
+    #                 for j in range(self.N):
+    #                     for l in range(self.k):
+    #                         edge_prob = log_poisson_density(self.data[i,j], self.gammas[k,l])
+    #                         total += tau_copy[j,l] * edge_prob
+
+    #                 print total
+    #                 self.taus[i,k] = np.exp(total)
+
+    #         print self.taus
+    #         print np.sum(self.taus, axis=1, keepdims=True)[0]
+    #         raw_input()
+    #         self.taus /= np.sum(self.taus, axis=1, keepdims=True)
+
+    #         # find residual
+    #         residual = np.max(np.abs(self.taus - tau_copy))
+
+    #         if residual < 1e-10:
+    #             print residual
+    #             print idx
+    #             break
+
+
     def e_step(self):
+        # assert valid tau
+        assert np.all([abs(v - 1) < 1e-5 for v in np.sum(self.taus, axis=1)])
+        assert not np.any([v < 0 for v in self.taus.flatten()])
+
+        # assert valid pi
+        assert abs(np.sum(self.pis) - 1) < 1e-5 and not np.any([v < 0 for v in self.pis])
+
+        # assert valid gammas
+        assert not np.any([v < 0 for v in self.gammas.flatten()])
+
+        # use deepcopy
+        # start total at a value
         for idx in range(self.e_iterations):
-            tau_copy = self.taus[:,:]
+            tau_copy = copy.deepcopy(self.taus)
             for i in range(self.N):
                 for k in range(self.k):
-                    total = 0
+                    total = np.log(self.pis[k])
                     for j in range(self.N):
                         if i == j: continue
                         for l in range(self.k):
                             edge_prob = log_poisson_density(self.data[i,j], self.gammas[k,l])
                             total += tau_copy[j,l] * edge_prob
-                    self.taus[i,k] = np.exp(total)
-            self.taus /= np.sum(self.taus, axis=1, keepdims=True)
-            # print self.taus
-            # raw_input()
+                            # print 'data[i,j]: {}'.format(self.data[i,j])
+                            # print 'gammas[k,l]: {}'.format(self.gammas[k,l])
+                            # print 'edge prob: {}'.format(edge_prob)
+                            # print 'tau_copy[j,l]: {}'.format(tau_copy[j,l])
+                            # print 'total: {}'.format(total)
+                    self.taus[i,k] = total
+
+            # normalize
+            for i in range(self.N):
+                self.taus[i, :] -= utils.log_sum_exp(self.taus[i, :]) 
+
+            # exponentiate
+            self.taus = np.exp(self.taus)
+
+            # find residual
+            residual = np.max(np.abs(self.taus - tau_copy))
+
+            if residual < 1e-10:
+                # print residual
+                # print idx
+                break
 
     # def e_step(self):
     #     for idx in range(self.e_iterations):
@@ -86,15 +147,36 @@ class SBM(object):
     #                 self.taus[i,k] = total
     #             self.taus[i, :] -= utils.log_sum_exp(self.taus[i, :]) 
     #         self.taus = np.exp(self.taus)
-            
+
     def log_prob(self):
-        prob = np.sum(self.taus * np.log(self.pis).reshape(1, -1))
+        # assert valid tau
+        assert np.all([abs(v - 1) < 1e-5 for v in np.sum(self.taus, axis=1)])
+        assert not np.any([v < 0 for v in self.taus.flatten()])
+
+        # assert valid pi
+        assert abs(np.sum(self.pis) - 1) < 1e-5 and not np.any([v < 0 for v in self.pis])
+
+        # assert valid gammas
+        assert not np.any([v < 0 for v in self.gammas.flatten()])
+
+        # entropy
+        prob = -np.sum(self.taus * np.log(self.taus))
+
+        # prior
+        prob += np.sum(self.taus * np.log(self.pis).reshape(1, -1))
+
+        # estimate of completed likelihood
         for i in range(self.N):
-            for j in range(i + 1, self.N):
+            # for j in range(i + 1, self.N):
+            for j in range(i, self.N):
                 for k in range(self.k):
                     for l in range(self.k):
                         density = log_poisson_density(self.data[i,j], self.gammas[k,l])
                         prob += self.taus[i,k] * self.taus[j,l] * density
+
+        # assert valid prob
+        assert not np.isnan(prob)
+
         return prob
 
     def fit(self, data, k, max_iterations, threshold, verbose=True):
@@ -113,14 +195,12 @@ class SBM(object):
             # compute log_prob
             log_prob = self.log_prob()
 
+            if verbose: 
+                print 'iter: {}\tlog_prob: {:.4f}'.format(idx, log_prob)
+
             # check for convergence
             if abs(log_prob - prev_log_prob) < threshold: 
                 break
             prev_log_prob = log_prob
-            if verbose: 
-                print 'iter: {}\tlog_prob: {:.4f}'.format(idx, log_prob)
-                # print self.pis
-                # print self.gammas
-                # raw_input()
 
         return log_prob

@@ -214,16 +214,81 @@ class TestSBM(unittest.TestCase):
         np.random.seed(4)
         input_filepath = '../data/tree_net.csv'
         data, keys = utils.load_data(input_filepath)
-        model = sbm.SBM(e_iterations=50)
+        model = sbm.SBM(e_iterations=1)
 
-        best_k = 0
-        best_log_prob = 0
-        best_pis = None
-        best_gammas = None
-        for k in range(10):
-            log_prob, bic, icl = model.fit(data, k, max_iterations=50, threshold=1e-5)
-        print model.pis
-        print model.gammas
+        num_k = 15
+        num_runs = 3
+        max_iterations = 50
+        threshold = 1e-2
+
+        # d = np.load('../data/results.npz')
+        # log_probs = d['log_probs']
+        # icls = d['icls']
+        # bics = d['bics']
+        # pis = d['pis']
+        # gammas = d['gammas']
+
+        bics, icls, log_probs = [], [], []
+        pis, gammas = [], []
+        for k in range(1, num_k + 1):
+            best_pis, best_gammas = None, None
+            best_log_prob, best_bic, best_icl = -sys.maxint, -sys.maxint, -sys.maxint
+            for idx in range(num_runs):
+                try:
+                    log_prob, bic, icl = model.fit(data, k, max_iterations, threshold)
+                except:
+                    continue
+                if icl > best_icl:
+                    best_icl = icl
+                    best_bic = bic
+                    best_log_prob = log_prob
+                    best_pis = copy.deepcopy(model.pis)
+                    best_gammas = copy.deepcopy(model.gammas)
+            pis.append(best_pis)
+            gammas.append(best_gammas)
+            bics.append(best_bic)
+            icls.append(best_icl)
+            log_probs.append(best_log_prob)
+
+        output_filepath = '../data/results.npz'
+        np.savez(output_filepath, pis=pis, gammas=gammas, bics=bics, icls=icls, log_probs=log_probs)
+        
+        plt.plot(range(len(log_probs)), log_probs, label='log_probs')
+        plt.title('log_probs')
+        plt.savefig('../data/log_probs.png')
+        plt.close()
+
+        plt.plot(range(len(bics)), bics, label='bics')
+        plt.title('bics')
+        plt.savefig('../data/bics.png')
+        plt.close()
+
+        plt.plot(range(len(icls)), icls, label='icls')
+        plt.title('icls')
+        plt.savefig('../data/icls.png')
+        plt.close()
+
+        best_idx = np.argmax(icls)
+        print 'best k: {}'.format(best_idx + 1)
+        print 'pis: {}'.format(pis[best_idx])
+        print 'gammas: {}'.format(gammas[best_idx])
+
+def analyze_save():
+    d = np.load('../data/results.npz')
+    log_probs = d['log_probs']
+    icls = d['icls']
+    bics = d['bics']
+    pis = d['pis']
+    gammas = d['gammas']
+
+    plt.plot(range(1, len(log_probs) + 1), log_probs, label='log_probs', linestyle='--')
+    plt.plot(range(1, len(bics) + 1), bics, label='bics', linestyle='-')
+    plt.plot(range(1, len(icls) + 1), icls, label='icls', linestyle='-.')
+    plt.title('model selection')
+    plt.legend(loc='best')
+    plt.savefig('../data/model_selection.png')
+    plt.close()
 
 if __name__ == '__main__':
+    # analyze_save()
     unittest.main()

@@ -5,8 +5,6 @@ import numpy as np
 
 import utils
 
-def bic(log_prob, )
-
 def log_factorial(value):
     return np.sum(np.log(v) for v in range(1, int(value) + 1, 1))
 
@@ -60,34 +58,6 @@ class SBM(object):
                         normalizer += self.taus[i,k] * self.taus[j,l]
                 self.gammas[k,l] = total / normalizer
 
-    # def _e_step(self):
-    #     for idx in range(self.e_iterations):
-    #         tau_copy = copy.deepcopy(self.taus)
-    #         for i in range(self.N):
-    #             for k in range(self.k):
-    #                 total = np.log(self.pis[k])
-    #                 for j in range(self.N):
-    #                     for l in range(self.k):
-    #                         edge_prob = log_poisson_density(self.data[i,j], self.gammas[k,l])
-    #                         total += tau_copy[j,l] * edge_prob
-
-    #                 print total
-    #                 self.taus[i,k] = np.exp(total)
-
-    #         print self.taus
-    #         print np.sum(self.taus, axis=1, keepdims=True)[0]
-    #         raw_input()
-    #         self.taus /= np.sum(self.taus, axis=1, keepdims=True)
-
-    #         # find residual
-    #         residual = np.max(np.abs(self.taus - tau_copy))
-
-    #         if residual < 1e-10:
-    #             print residual
-    #             print idx
-    #             break
-
-
     def e_step(self):
         # assert valid tau
         assert np.all([abs(v - 1) < 1e-5 for v in np.sum(self.taus, axis=1)])
@@ -111,11 +81,7 @@ class SBM(object):
                         for l in range(self.k):
                             edge_prob = log_poisson_density(self.data[i,j], self.gammas[k,l])
                             total += tau_copy[j,l] * edge_prob
-                            # print 'data[i,j]: {}'.format(self.data[i,j])
-                            # print 'gammas[k,l]: {}'.format(self.gammas[k,l])
-                            # print 'edge prob: {}'.format(edge_prob)
-                            # print 'tau_copy[j,l]: {}'.format(tau_copy[j,l])
-                            # print 'total: {}'.format(total)
+
                     self.taus[i,k] = total
 
             # normalize
@@ -129,24 +95,7 @@ class SBM(object):
             residual = np.max(np.abs(self.taus - tau_copy))
 
             if residual < 1e-10:
-                # print residual
-                # print idx
                 break
-
-    # def e_step(self):
-    #     for idx in range(self.e_iterations):
-    #         tau_copy = self.taus[:,:]
-    #         for i in range(self.N):
-    #             for k in range(self.k):
-    #                 total = 0
-    #                 for j in range(self.N):
-    #                     if i == j: continue
-    #                     for l in range(self.k):
-    #                         edge_prob = log_poisson_density(self.data[i,j], self.gammas[k,l])
-    #                         total += tau_copy[j,l] * edge_prob
-    #                 self.taus[i,k] = total
-    #             self.taus[i, :] -= utils.log_sum_exp(self.taus[i, :]) 
-    #         self.taus = np.exp(self.taus)
 
     def log_prob(self):
         # assert valid tau
@@ -159,32 +108,33 @@ class SBM(object):
         # assert valid gammas
         assert not np.any([v < 0 for v in self.gammas.flatten()])
 
-        # entropy
-        prob = -np.sum(self.taus * np.log(self.taus))
-
         # prior
-        prob += np.sum(self.taus * np.log(self.pis).reshape(1, -1))
+        prob = np.sum(self.taus * np.log(self.pis).reshape(1, -1))
 
         # estimate of completed likelihood
         for i in range(self.N):
-            # for j in range(i + 1, self.N):
-            for j in range(i, self.N):
+            for j in range(i + 1, self.N):
                 for k in range(self.k):
                     for l in range(self.k):
                         density = log_poisson_density(self.data[i,j], self.gammas[k,l])
                         prob += self.taus[i,k] * self.taus[j,l] * density
 
+        # return joint log probability for use in ICL
+        joint_prob = prob
+        # entropy
+        prob += -np.sum(self.taus * np.log(self.taus))
+
         # assert valid prob
         assert not np.isnan(prob)
 
-        return prob
+        return prob, joint_prob
 
     def fit(self, data, k, max_iterations, threshold, verbose=True):
         # allocate containers
         self.initialize(data, k)
 
         # repeatedly loop through e and m steps until convergence
-        prev_log_prob = log_prob = 0
+        prev_log_prob = log_prob = log_joint_prob = 0
         for idx in range(max_iterations):
             # e-step
             self.e_step()
@@ -193,7 +143,7 @@ class SBM(object):
             self.m_step()
 
             # compute log_prob
-            log_prob = self.log_prob()
+            log_prob, log_joint_prob = self.log_prob()
 
             if verbose: 
                 print 'iter: {}\tlog_prob: {:.4f}'.format(idx, log_prob)
@@ -203,4 +153,8 @@ class SBM(object):
                 break
             prev_log_prob = log_prob
 
-        return log_prob
+        num_params = k - 1 + k * (k - 1)
+        num_samples = len(data)
+        bic = log_prob - num_params / 2. * np.log(num_samples) 
+        icl = log_joint_prob - num_params / 2. * np.log(num_samples)
+        return log_prob, bic, icl

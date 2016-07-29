@@ -211,32 +211,35 @@ class TestSBM(unittest.TestCase):
         print best_gammas
 
     def test_fit_real_data(self):
-        np.random.seed(4)
-        input_filepath = '../data/tree_net.csv'
+        np.random.seed(2)
+        input_filepath = '../data/fungi_net.csv'
         data, keys = utils.load_data(input_filepath)
-        model = sbm.SBM(e_iterations=1)
+        model = sbm.SBM(e_iterations=2)
 
-        num_k = 15
-        num_runs = 3
-        max_iterations = 50
-        threshold = 1e-2
+        num_k = 10
+        num_runs = 1
+        max_iterations = 10
+        threshold = 1e-5
 
-        # d = np.load('../data/results.npz')
-        # log_probs = d['log_probs']
-        # icls = d['icls']
-        # bics = d['bics']
-        # pis = d['pis']
-        # gammas = d['gammas']
+        output_filepath = '../data/results_fungi.npz'
 
-        bics, icls, log_probs = [], [], []
-        pis, gammas = [], []
-        for k in range(1, num_k + 1):
+        d = np.load('../data/results_fungi.npz')
+        log_probs = list(d['log_probs'])
+        icls = list(d['icls'])
+        bics = list(d['bics'])
+        pis = list(d['pis'])
+        gammas = list(d['gammas'])
+
+        # bics, icls, log_probs = [], [], []
+        # pis, gammas = [], []
+        for k in range(10, 11):
             best_pis, best_gammas = None, None
             best_log_prob, best_bic, best_icl = -sys.maxint, -sys.maxint, -sys.maxint
             for idx in range(num_runs):
                 try:
                     log_prob, bic, icl = model.fit(data, k, max_iterations, threshold)
-                except:
+                except Exception as e:
+                    print e
                     continue
                 if icl > best_icl:
                     best_icl = icl
@@ -249,24 +252,24 @@ class TestSBM(unittest.TestCase):
             bics.append(best_bic)
             icls.append(best_icl)
             log_probs.append(best_log_prob)
-
-        output_filepath = '../data/results.npz'
-        np.savez(output_filepath, pis=pis, gammas=gammas, bics=bics, icls=icls, log_probs=log_probs)
+            # save after each k
+            raw_input()
+            np.savez(output_filepath, pis=pis, gammas=gammas, bics=bics, icls=icls, log_probs=log_probs)
         
-        plt.plot(range(len(log_probs)), log_probs, label='log_probs')
-        plt.title('log_probs')
-        plt.savefig('../data/log_probs.png')
-        plt.close()
+            plt.plot(range(len(log_probs)), log_probs, label='log_probs')
+            plt.title('log_probs')
+            plt.savefig('../data/log_probs.png')
+            plt.close()
 
-        plt.plot(range(len(bics)), bics, label='bics')
-        plt.title('bics')
-        plt.savefig('../data/bics.png')
-        plt.close()
+            plt.plot(range(len(bics)), bics, label='bics')
+            plt.title('bics')
+            plt.savefig('../data/bics.png')
+            plt.close()
 
-        plt.plot(range(len(icls)), icls, label='icls')
-        plt.title('icls')
-        plt.savefig('../data/icls.png')
-        plt.close()
+            plt.plot(range(len(icls)), icls, label='icls')
+            plt.title('icls')
+            plt.savefig('../data/icls.png')
+            plt.close()
 
         best_idx = np.argmax(icls)
         print 'best k: {}'.format(best_idx + 1)
@@ -274,7 +277,7 @@ class TestSBM(unittest.TestCase):
         print 'gammas: {}'.format(gammas[best_idx])
 
 def analyze_save():
-    d = np.load('../data/results.npz')
+    d = np.load('../data/results_fungi.npz')
     log_probs = d['log_probs']
     icls = d['icls']
     bics = d['bics']
@@ -289,6 +292,11 @@ def analyze_save():
     plt.savefig('../data/model_selection.png')
     plt.close()
 
+    best_idx = np.argmax(icls)
+    print 'best k: {}'.format(best_idx + 1)
+    print 'pis: {}'.format(pis[best_idx])
+    print 'gammas: {}'.format(gammas[best_idx])
+
 if __name__ == '__main__':
-    # analyze_save()
-    unittest.main()
+    analyze_save()
+    # unittest.main()

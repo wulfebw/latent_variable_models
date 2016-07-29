@@ -41,9 +41,14 @@ def load_data(input_filepath):
         infile.readline()
         csv_reader = csv.reader(infile)
         for row in csv_reader:
-            keys.append(row[0])
-            values = [int(v) for v in row[1:]]
-            data.append(values)
+            if 'tree' in input_filepath:
+                keys.append(row[0])
+                values = [int(v) for v in row[1:]]
+                data.append(values)
+            elif 'fungi' in input_filepath:
+                keys.append(row[-1])
+                values = [int(v) for v in row[:-1]]
+                data.append(values)
 
     data = np.asarray(data, dtype=np.float64)
     return data, keys

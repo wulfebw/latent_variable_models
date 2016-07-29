@@ -99,9 +99,7 @@ class HMM(object):
 
                 # iterate over next k values (timestep t + 1)
                 for j in range(self.k):
-                    timestep_values[j] = self.log_densities[tidx + 1, j] + \
-                                         self.log_A[i, j] + \
-                                         self.betas[tidx + 1, j]
+                    timestep_values[j] = self.log_densities[tidx + 1, j] + self.log_A[i, j] + self.betas[tidx + 1, j]
 
                 # set value for jth class at time t
                 self.betas[tidx, i] = utils.log_sum_exp(timestep_values)
@@ -130,10 +128,7 @@ class HMM(object):
         for tidx in range(self.T - 1):
             for i in range(self.k):
                 for j in range(self.k):
-                    self.etas[tidx, i, j] = self.alphas[tidx, i] + \
-                                            self.log_A[i, j] + \
-                                            self.log_densities[tidx + 1, j] + \
-                                            self.betas[tidx + 1, j]
+                    self.etas[tidx, i, j] = self.alphas[tidx, i] + self.log_A[i, j] + self.log_densities[tidx + 1, j] + self.betas[tidx + 1, j]
         # normalize
         self.etas -= utils.log_sum_exp(self.alphas[-1, :])
         # convert from log to normal space
@@ -178,5 +173,9 @@ class HMM(object):
                 print 'iter: {}\tlog_prob: {:.4f}'.format(idx, log_prob)
 
         # return the log probability of the fit
-        return log_prob
+
+        num_params = self.k - 1 + self.k * (self.k - 1)
+        num_samples = len(self.data)
+        bic = log_prob - num_params / 2. * np.log(num_samples) 
+        return log_prob, bic
 

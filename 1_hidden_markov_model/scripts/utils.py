@@ -1,5 +1,6 @@
 
 import csv
+import matplotlib.pyplot as plt
 import numpy as np
 
 def load_data(input_filepath):
@@ -25,7 +26,12 @@ def log_sum_exp(values):
 
     return np.log(total) + max_value
 
+def plot_data(data):
+    plt.plot(range(len(data)), data)
+    plt.show()
+
 if __name__ == '__main__':
     input_filepath = '../data/old_faithful.csv'
     data = load_data(input_filepath)
+    plot_data(data)
     print data

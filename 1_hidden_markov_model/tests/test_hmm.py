@@ -1,4 +1,5 @@
 
+import copy
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -211,13 +212,66 @@ class TestHMMRealData(unittest.TestCase):
         np.random.seed(42)
 
         data = self.get_data()
-        k = 4
+
+        num_k = 9
+        num_runs = 5
         max_iterations = 50
-        threshold = 1e-10
-        m = hmm.HMM(data, k, max_iterations, threshold, verbose=True, seed=np.random.randint(100))
-        m.fit()
-        print 'learned A: {}'.format(m.A)
-        print 'learned B: {}'.format(m.B)
+        threshold = 1e-4
+        output_filepath = '../data/hmm_results.npz'
+
+        bics, icls, log_probs = [], [], []
+        As, Bs = [], []
+
+        for k in range(2, num_k + 1):
+            best_A, best_B = None, None
+            best_log_prob, best_bic = -sys.maxint, -sys.maxint
+            for r in range(num_runs):
+
+                model = hmm.HMM(data, k, max_iterations, threshold, verbose=True, seed=np.random.randint(100))
+                model.initialize()
+                log_prob, bic = model.fit()
+        
+                if bic > best_bic:
+                    best_bic = bic
+                    best_log_prob = log_prob
+                    best_A = copy.deepcopy(model.A)
+                    best_B = copy.deepcopy(model.B)
+
+            As.append(best_A)
+            Bs.append(best_B)
+            bics.append(best_bic)
+            log_probs.append(best_log_prob)
+            np.savez(output_filepath, As=As, Bs=Bs, bics=bics, log_probs=log_probs)
+        
+            plt.plot(range(len(log_probs)), log_probs, label='log_probs')
+            plt.title('log_probs')
+            plt.savefig('../data/hmm_log_probs.png')
+            plt.close()
+
+            plt.plot(range(len(bics)), bics, label='bics')
+            plt.title('bics')
+            plt.savefig('../data/hmm_bics.png')
+            plt.close()
+
+def analyze_save():
+    d = np.load('../data/hmm_results.npz')
+    log_probs = d['log_probs']
+    bics = d['bics']
+    As = d['As']
+    Bs = d['Bs']
+
+    plt.plot(range(2, len(log_probs) + 2), log_probs, label='log_probs', linestyle='--')
+    plt.plot(range(2, len(bics) + 2), bics, label='bics', linestyle='-')
+    plt.title('hmm model selection')
+    plt.legend(loc='best')
+    plt.savefig('../data/hmm_model_selection.png')
+    plt.close()
+
+    best_idx = np.argmax(bics)
+    print 'best k: {}'.format(best_idx + 2)
+    print 'A: {}'.format(As[best_idx])
+    print 'B: {}'.format(Bs[best_idx])
 
 if __name__ == '__main__':
-    unittest.main()
+    analyze_save()
+    # unittest.main()
